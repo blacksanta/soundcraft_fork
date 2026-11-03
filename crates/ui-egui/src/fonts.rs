@@ -29,6 +29,31 @@ const BOLD: &[(&str, u32)] = &[
     ("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 0),
     ("/usr/share/fonts/liberation-sans-fonts/LiberationSans-Bold.ttf", 0),
 ];
+/// Japanese fallback (kana and kanji), appended after every family so the Japanese interface and
+/// Japanese session, track and clip names draw whatever the interface language. It comes before the
+/// Hangul fallback so shared CJK ideographs take Japanese glyph shapes. The Noto Sans CJK
+/// collection's face 0 is its Japanese face.
+const JAPANESE: &[(&str, u32)] = &[
+    ("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 0),
+    ("/System/Library/Fonts/Hiragino Sans W3.ttc", 0),
+    ("C:\\Windows\\Fonts\\YuGothM.ttc", 0),
+    ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
+    ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
+    ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0),
+    ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0),
+    ("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 0),
+    ("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf", 0),
+];
+/// Bold Japanese for the "bold" family; the regular Japanese face stands in when none is found.
+const JAPANESE_BOLD: &[(&str, u32)] = &[
+    ("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc", 0),
+    ("/System/Library/Fonts/Hiragino Sans W6.ttc", 0),
+    ("C:\\Windows\\Fonts\\YuGothB.ttc", 0),
+    ("C:\\Windows\\Fonts\\meiryob.ttc", 0),
+    ("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 0),
+    ("/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc", 0),
+    ("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc", 0),
+];
 /// Hangul fallback, appended after every family so Korean session, track and clip names draw
 /// whatever the interface language. The Noto Sans CJK collection's face 1 is its Korean face.
 const HANGUL: &[(&str, u32)] = &[
@@ -126,6 +151,17 @@ pub fn definitions(system_fonts: bool) -> FontDefinitions {
         bold_family.insert(0, "system-regular".into());
     }
     fonts.families.insert(FontFamily::Name("bold".into()), bold_family);
+    if let Some(j) = load(JAPANESE, "sans-serif:lang=ja", Some("ja"), system_fonts) {
+        fonts.font_data.insert("system-japanese".into(), Arc::new(j));
+        let bold = load(JAPANESE_BOLD, "sans-serif:lang=ja:style=Bold", Some("ja"), system_fonts).map(|b| {
+            fonts.font_data.insert("system-japanese-bold".into(), Arc::new(b));
+            "system-japanese-bold"
+        });
+        for (name, family) in &mut fonts.families {
+            let face = if *name == FontFamily::Name("bold".into()) { bold.unwrap_or("system-japanese") } else { "system-japanese" };
+            family.push(face.into());
+        }
+    }
     if let Some(h) = load(HANGUL, "sans-serif:lang=ko", Some("ko"), system_fonts) {
         fonts.font_data.insert("system-hangul".into(), Arc::new(h));
         for family in fonts.families.values_mut() {
@@ -150,6 +186,37 @@ mod tests {
         }
         // Face 0 of the Noto Sans CJK collection is Japanese; the Korean face is 1.
         assert!(HANGUL.iter().filter(|(p, _)| p.ends_with("NotoSansCJK-Regular.ttc")).all(|(_, i)| *i == 1));
+    }
+
+    #[test]
+    fn japanese_candidates_cover_every_desktop_platform() {
+        for list in [JAPANESE, JAPANESE_BOLD] {
+            for prefix in ["/System/Library/Fonts/", "C:\\Windows\\Fonts\\", "/usr/share/fonts/"] {
+                assert!(list.iter().any(|(p, _)| p.starts_with(prefix)), "no Japanese candidate under {prefix}");
+            }
+            // Face 0 of the Noto Sans CJK collection is Japanese.
+            assert!(list.iter().filter(|(p, _)| p.contains("NotoSansCJK-")).all(|(_, i)| *i == 0));
+        }
+    }
+
+    /// The Japanese interface draws in every family, not as boxes; skipped when the system has no
+    /// Japanese font.
+    #[test]
+    fn every_family_draws_japanese_with_a_system_japanese_font() {
+        let defs = definitions(true);
+        if !defs.font_data.contains_key("system-japanese") {
+            eprintln!("skipping: no Japanese system font");
+            return;
+        }
+        let families: Vec<FontFamily> = defs.families.keys().cloned().collect();
+        let ctx = egui::Context::default();
+        ctx.set_fonts(defs);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+        output.textures_delta.clear();
+        for family in families {
+            let font = egui::FontId::new(13.0, family.clone());
+            assert!(ctx.fonts_mut(|f| f.has_glyphs(&font, "日本語セッションのトラックを録音")), "{family:?} has no Japanese");
+        }
     }
 
     /// Every literal glyph the UI fixtures paint is covered by the bundled faces in every family,
