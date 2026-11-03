@@ -133,6 +133,47 @@ fn load(_: &[(&str, u32)], _: &str, _: Option<&str>, _: bool) -> Option<FontData
     None
 }
 
+/// How far below the Latin baseline `face` draws by default, as a fraction of the font size.
+/// egui centres a fallback face's line box in the first face's, which suits emoji but lifts CJK
+/// faces with a deep descent (Hiragino, Apple SD Gothic Neo) above the Latin baseline, so their
+/// tops were clipped in track names and rulers. Measured rather than tabled: the metrics differ
+/// by platform font.
+fn baseline_drop(fonts: &FontDefinitions, primary: &str, face: &str, sample: char) -> Option<f32> {
+    const SIZE: f32 = 100.0;
+    let mut probe = FontDefinitions { font_data: fonts.font_data.clone(), families: Default::default() };
+    let family = FontFamily::Name("baseline-probe".into());
+    probe.families.insert(family.clone(), vec![primary.to_owned(), face.to_owned()]);
+    let ctx = egui::Context::default();
+    ctx.set_fonts(probe);
+    let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+    output.textures_delta.clear();
+    let galley = ctx.fonts_mut(|f| f.layout_no_wrap(format!("H{sample}"), egui::FontId::new(SIZE, family), egui::Color32::WHITE));
+    let row = galley.rows.first()?;
+    let (latin, cjk) = (row.glyphs.first()?, row.glyphs.get(1)?);
+    let drop = (latin.pos.y - cjk.pos.y) / SIZE;
+    (drop.is_finite() && drop.abs() < 0.5).then_some(drop)
+}
+
+/// Shift each CJK fallback down onto the Latin baseline of the family it serves. The line height
+/// is unchanged (the tweak is visual only), so fixed-height boxes keep their layout.
+fn align_cjk_fallbacks(fonts: &mut FontDefinitions) {
+    let first = |fonts: &FontDefinitions, family: &FontFamily| fonts.families.get(family).and_then(|f| f.first().cloned());
+    let regular = first(fonts, &FontFamily::Proportional);
+    let bold = first(fonts, &FontFamily::Name("bold".into()));
+    for (face, primary, sample) in [("system-japanese", &regular, 'あ'), ("system-japanese-bold", &bold, 'あ'), ("system-hangul", &regular, '가')]
+    {
+        let Some(primary) = primary else { continue };
+        if !fonts.font_data.contains_key(face) {
+            continue;
+        }
+        if let Some(drop) = baseline_drop(fonts, primary, face, sample)
+            && let Some(data) = fonts.font_data.get_mut(face)
+        {
+            Arc::make_mut(data).tweak.y_offset_factor = drop;
+        }
+    }
+}
+
 /// The font set: the bundled faces, plus the system ones when `system_fonts` is true.
 pub fn definitions(system_fonts: bool) -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
@@ -168,6 +209,7 @@ pub fn definitions(system_fonts: bool) -> FontDefinitions {
             family.push("system-hangul".into());
         }
     }
+    align_cjk_fallbacks(&mut fonts);
     fonts
 }
 
@@ -217,6 +259,29 @@ mod tests {
             let font = egui::FontId::new(13.0, family.clone());
             assert!(ctx.fonts_mut(|f| f.has_glyphs(&font, "日本語セッションのトラックを録音")), "{family:?} has no Japanese");
         }
+    }
+
+    /// Japanese glyphs draw on the Latin baseline without making the row taller, so names in
+    /// fixed-height boxes aren't clipped; skipped when the system has no Japanese font.
+    #[test]
+    fn japanese_sits_on_the_latin_baseline() {
+        let defs = definitions(true);
+        let Some(ja) = defs.font_data.get("system-japanese") else {
+            eprintln!("skipping: no Japanese system font");
+            return;
+        };
+        let drop = ja.tweak.y_offset_factor;
+        let ctx = egui::Context::default();
+        ctx.set_fonts(defs);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+        output.textures_delta.clear();
+        let font = egui::FontId::proportional(13.0);
+        let layout = |text: &str| ctx.fonts_mut(|f| f.layout_no_wrap(text.into(), font.clone(), egui::Color32::WHITE));
+        let (mixed, latin) = (layout("Ab小節"), layout("Ab"));
+        assert_eq!(mixed.rect.height(), latin.rect.height(), "Japanese text grew the row");
+        let row = &mixed.rows[0];
+        let drawn = row.glyphs[2].pos.y + drop * 13.0;
+        assert!((row.glyphs[0].pos.y - drawn).abs() < 0.05, "kanji baseline {drawn} vs Latin {}", row.glyphs[0].pos.y);
     }
 
     /// Every literal glyph the UI fixtures paint is covered by the bundled faces in every family,
