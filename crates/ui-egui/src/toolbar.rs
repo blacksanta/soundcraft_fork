@@ -307,6 +307,22 @@ fn grid_label(g: &GridValue) -> String {
     }
 }
 
+/// Horizontal room kept free on each side of a key's label.
+const KEY_LABEL_PAD: f32 = 3.0;
+
+/// The bold point size at which `text` fits `width`: `size`, or smaller for a longer translation
+/// (never below 7 pt, where the label is clipped instead).
+fn fitted_size(ui: &Ui, text: &str, size: f32, width: f32) -> f32 {
+    let natural = ui.painter().layout_no_wrap(text.to_owned(), bold(size), Color32::WHITE).size().x;
+    if natural <= width || natural <= 0.0 { size } else { (size * width / natural).max(7.0) }
+}
+
+/// A key's bold label centred in `rect`, shrunk to fit when the translation is wider than the key.
+fn key_label(ui: &Ui, rect: Rect, text: &str, size: f32, color: Color32) {
+    let size = fitted_size(ui, text, size, rect.width() - 2.0 * KEY_LABEL_PAD);
+    ui.painter().with_clip_rect(rect).text(rect.center(), Align2::CENTER_CENTER, text, bold(size), color);
+}
+
 fn grid_nudge(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let (grid, nudge, lines) = {
@@ -318,7 +334,7 @@ fn grid_nudge(app: &mut SoundApp, ui: &mut Ui) {
     let gl = Rect::from_min_size(pos2(r.min.x + 6.0, r.min.y + 8.0), vec2(48.0, 16.0));
     let resp = ui.interact(gl, ui.scope_id().with("grid_lines"), Sense::click());
     key(ui.painter(), gl, &resp, if lines { t.mode_on } else { t.counter_off });
-    ui.painter().text(gl.center(), Align2::CENTER_CENTER, tr("Grid"), bold(11.0), if lines { t.mode_on_text } else { t.mode_off_text });
+    key_label(ui, gl, tr("Grid"), 11.0, if lines { t.mode_on_text } else { t.mode_off_text });
     if resp.on_hover_text(tr("Show grid lines")).clicked() {
         let _ = app.run("view.grid_lines", json!({}));
     }
@@ -430,7 +446,7 @@ fn tempo_meter(app: &mut SoundApp, ui: &mut Ui) {
     let co = Rect::from_min_size(pos2(r.min.x + 6.0, r.min.y + 6.0), vec2(64.0, 15.0));
     let resp = ui.interact(co, ui.scope_id().with("countoff"), Sense::click());
     key(ui.painter(), co, &resp, if countoff { t.mode_on } else { t.counter_off });
-    ui.painter().text(co.center(), Align2::CENTER_CENTER, tr("Count Off"), bold(10.0), if countoff { t.mode_on_text } else { t.mode_off_text });
+    key_label(ui, co, tr("Count Off"), 10.0, if countoff { t.mode_on_text } else { t.mode_off_text });
     if resp.clicked() {
         let _ = app.run("options.countoff", json!({}));
     }
@@ -503,5 +519,25 @@ mod tests {
         icons.sort_unstable();
         icons.dedup();
         assert_eq!(icons.len(), toggles.len(), "every option toggle needs its own icon");
+    }
+
+    #[test]
+    fn long_key_labels_shrink_to_fit_and_short_ones_keep_their_size() {
+        let ctx = egui::Context::default();
+        crate::fonts::install(&ctx, true);
+        let mut checked = false;
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                assert_eq!(fitted_size(ui, "Grid", 11.0, 42.0), 11.0);
+                let size = fitted_size(ui, "Grid lines everywhere", 11.0, 42.0);
+                assert!((7.0..11.0).contains(&size), "{size}");
+                let width =
+                    ui.painter().layout_no_wrap("Grid lines".into(), bold(fitted_size(ui, "Grid lines", 11.0, 42.0)), Color32::WHITE).size().x;
+                assert!(width <= 42.5, "{width}");
+                checked = true;
+            });
+            out.textures_delta.clear();
+        }
+        assert!(checked);
     }
 }
