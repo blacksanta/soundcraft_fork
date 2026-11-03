@@ -701,7 +701,7 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
                 return Some(Ok(json!({"lang": app.ui.language.id()})));
             };
             let Some(lang) = crate::i18n::Language::parse(lang) else {
-                return Some(Err(format!("unknown language `{lang}` (en, fr or es)")));
+                return Some(Err(format!("unknown language `{lang}` (en, fr, es or ja)")));
             };
             app.ui.language = lang;
             crate::i18n::set(lang);

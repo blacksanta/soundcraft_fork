@@ -1,9 +1,10 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first per-language status) · **Target:** Avid Pro Tools Ultimate 2026.4.1
+> **Last reviewed:** 2026-11-04 · **Last updated:** 2026-11-04 · **Change:** minor (Japanese interface) · **Target:** Avid Pro Tools Ultimate 2026.4.1
 
-SoundCraft is English only. There is no string catalog: every menu label, dialog and tooltip is a
-literal in Rust (`crates/engine/src/cmd/*`, `crates/ui-egui/src/*`). Pro Tools ships its UI in
+Every menu label, dialog and tooltip is an English literal in Rust (`crates/engine/src/cmd/*`,
+`crates/ui-egui/src/*`) shown through `i18n::tr`, which looks it up in a per-language table
+(`crates/ui-egui/src/i18n/`). Setup › Appearance › Language (or `ui.language`) picks the language. Pro Tools ships its UI in
 **8 languages** (bundle `.lproj` folders: English, German, Spanish, French, Japanese, Korean,
 Simplified Chinese, Traditional Chinese).
 
@@ -26,7 +27,7 @@ fallbacks), issue #67 (Ukrainian).
 | French | fr | 0 (0 %) — PR #143 pending | ❌ | Latin ✅ | no | none | 3–5 | ✅ |
 | Portuguese | pt | 0 (0 %) | ❌ | Latin ✅ | no | none | 3–5 | ❌ |
 | Indonesian | id | 0 (0 %) | ❌ | Latin ✅ | no | none | 3–5 | ❌ |
-| Japanese | ja | 0 (0 %) | ❌ | ❌ no CJK font fallback, no IME testing | no | none | 6–10 | ✅ |
+| Japanese | ja | all `tr` strings (100 %) | ✅ | 🟡 system font (Hiragino / Yu Gothic / Meiryo / Noto Sans CJK JP); none on web or with `SOUNDCRAFT_NO_SYSTEM_FONTS`; IME untested | no | agent translation | 1–2 (review) | ✅ |
 | German | de | 0 (0 %) | ❌ | Latin ✅ | no | none | 3–5 | ✅ |
 | Korean | ko | 0 (0 %) | ❌ | ❌ no Hangul font fallback | no | none | 6–10 | ✅ |
 | Vietnamese | vi | 0 (0 %) | ❌ | 🟡 Latin with stacked diacritics, untested | no | none | 3–5 | ❌ |
@@ -39,4 +40,5 @@ Per-language hours exclude the shared catalog and script work above.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Japanese: full `tr` table, `ui.language {"lang":"ja"}`, system Japanese font fallback; native review pending |
 | 2026-10-10 | major | Created: English only, no catalog; the twelve key languages at 0 %; Pro Tools' 8 languages listed from its bundle |

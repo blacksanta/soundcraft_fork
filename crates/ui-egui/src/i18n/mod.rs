@@ -6,6 +6,7 @@
 //! the control channel stay in English, so scripts and agents behave the same in every language.
 
 mod strings;
+mod strings_ja;
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -20,10 +21,11 @@ pub enum Language {
     En,
     Fr,
     Es,
+    Ja,
 }
 
 impl Language {
-    pub const ALL: [Self; 3] = [Self::En, Self::Fr, Self::Es];
+    pub const ALL: [Self; 4] = [Self::En, Self::Fr, Self::Es, Self::Ja];
 
     /// The language's own name, shown untranslated so anyone can find theirs.
     pub const fn native_name(self) -> &'static str {
@@ -31,6 +33,7 @@ impl Language {
             Self::En => "English",
             Self::Fr => "Français",
             Self::Es => "Español",
+            Self::Ja => "日本語",
         }
     }
 
@@ -40,6 +43,7 @@ impl Language {
             Self::En => "en",
             Self::Fr => "fr",
             Self::Es => "es",
+            Self::Ja => "ja",
         }
     }
 
@@ -66,10 +70,12 @@ pub fn current() -> Language {
 fn table(lang: Language) -> Option<&'static HashMap<&'static str, &'static str>> {
     static FR: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     static ES: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    static JA: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     let (cell, pick): (_, fn(&(&'static str, &'static str, &'static str)) -> &'static str) = match lang {
         Language::En => return None,
         Language::Fr => (&FR, |r| r.1),
         Language::Es => (&ES, |r| r.2),
+        Language::Ja => return Some(JA.get_or_init(|| strings_ja::STRINGS_JA.iter().copied().collect())),
     };
     Some(cell.get_or_init(|| strings::STRINGS.iter().map(|r| (r.0, pick(r))).collect()))
 }
@@ -87,7 +93,9 @@ pub fn tr_in(lang: Language, s: &str) -> &str {
     }
 }
 
-/// Translate a template, then fill its `{}` placeholders in order (`{{` and `}}` are literal braces).
+/// Translate a template, then fill its placeholders: `{}` takes the next argument in order, `{0}`, `{1}`…
+/// take that argument (for languages whose word order differs from English). `{{` and `}}` are literal
+/// braces.
 pub fn trf(template: &str, args: &[&dyn Display]) -> String {
     fill(tr(template), args)
 }
@@ -95,14 +103,28 @@ pub fn trf(template: &str, args: &[&dyn Display]) -> String {
 fn fill(template: &str, args: &[&dyn Display]) -> String {
     use std::fmt::Write;
     let mut out = String::with_capacity(template.len() + 8 * args.len());
-    let mut args = args.iter();
+    let mut next = args.iter();
     let mut chars = template.chars().peekable();
     while let Some(c) = chars.next() {
         match (c, chars.peek()) {
             ('{', Some('}')) => {
                 chars.next();
-                if let Some(a) = args.next() {
+                if let Some(a) = next.next() {
                     let _ = write!(out, "{a}");
+                }
+            }
+            ('{', Some(d)) if d.is_ascii_digit() => {
+                let mut digits = String::new();
+                let mut probe = chars.clone();
+                while let Some(d) = probe.next_if(char::is_ascii_digit) {
+                    digits.push(d);
+                }
+                match (probe.next(), digits.parse::<usize>().ok().and_then(|i| args.get(i))) {
+                    (Some('}'), Some(a)) => {
+                        chars = probe;
+                        let _ = write!(out, "{a}");
+                    }
+                    _ => out.push(c),
                 }
             }
             ('{', Some('{')) | ('}', Some('}')) => {

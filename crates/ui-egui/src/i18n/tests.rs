@@ -301,3 +301,82 @@ fn the_menu_bar_draws_in_french_and_still_dispatches_english_paths() {
     assert_eq!(tr("Window"), "Fenêtre");
     set(Language::En);
 }
+
+/// The placeholder count of a translation: `{}` each, or one past the highest `{n}`.
+fn placeholders(s: &str) -> (usize, Vec<usize>) {
+    let plain = s.replace("{{", "").replace("}}", "");
+    let mut indexed = Vec::new();
+    let mut rest = plain.as_str();
+    while let Some(i) = rest.find('{') {
+        rest = &rest[i + 1..];
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        if !digits.is_empty() && rest[digits.len()..].starts_with('}') {
+            indexed.push(digits.parse().unwrap_or(usize::MAX));
+        }
+    }
+    (plain.matches("{}").count(), indexed)
+}
+
+#[test]
+fn every_visible_string_has_a_japanese_translation() {
+    let mut rows = BTreeSet::new();
+    for r in strings_ja::STRINGS_JA {
+        assert!(rows.insert(r.0), "duplicate Japanese row `{}`", r.0);
+    }
+    let missing: Vec<String> = all_keys().into_iter().filter(|k| !rows.contains(k.as_str())).collect();
+    assert!(missing.is_empty(), "{} strings have no Japanese row:\n{}", missing.len(), missing.join("\n"));
+    let empty: Vec<&str> = strings_ja::STRINGS_JA.iter().filter(|r| r.1.is_empty()).map(|r| r.0).collect();
+    assert!(empty.is_empty(), "empty Japanese rows:\n{}", empty.join("\n"));
+    // Every Japanese row translates a string the interface shows.
+    let english: BTreeSet<&str> = strings::STRINGS.iter().map(|r| r.0).collect();
+    let stray: Vec<&str> = rows.iter().copied().filter(|k| !english.contains(k)).collect();
+    assert!(stray.is_empty(), "Japanese rows with no English row:\n{}", stray.join("\n"));
+}
+
+#[test]
+fn japanese_translations_keep_their_placeholders() {
+    for (en, ja) in strings_ja::STRINGS_JA {
+        let (n, _) = placeholders(en);
+        let (plain, mut indexed) = placeholders(ja);
+        if indexed.is_empty() {
+            assert_eq!(plain, n, "ja: {en} → {ja}");
+        } else {
+            assert_eq!(plain, 0, "ja mixes {{}} and {{n}}: {en} → {ja}");
+            indexed.sort_unstable();
+            indexed.dedup();
+            assert_eq!(indexed, (0..n).collect::<Vec<_>>(), "ja: {en} → {ja}");
+        }
+    }
+}
+
+#[test]
+fn indexed_placeholders_reorder_arguments() {
+    assert_eq!(fill("{1}の{0}", &[&"a", &"b"]), "bのa");
+    assert_eq!(fill("{0}{0}", &[&7]), "77");
+    assert_eq!(fill("{{0}} {2} {x}", &[&1]), "{0} {2} {x}");
+    assert_eq!(fill("{} and {}", &[&1, &2]), "1 and 2");
+}
+
+#[test]
+fn tr_reads_japanese() {
+    set(Language::Ja);
+    assert_eq!(tr("File"), "ファイル");
+    assert_eq!(tr("no such string"), "no such string");
+    set(Language::En);
+    assert_eq!(Language::parse("ja"), Some(Language::Ja));
+    assert_eq!(Language::parse("日本語"), Some(Language::Ja));
+}
+
+#[test]
+fn the_menu_bar_draws_in_japanese_and_still_dispatches_english_paths() {
+    let mut app = SoundApp::new(soundcraft_engine::demo::demo_engine(), None, Services::default());
+    assert_eq!(app.run("ui.language", json!({"lang": "ja"})), Ok(json!({"lang": "ja"})));
+    let ctx = egui::Context::default();
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.ui(ui));
+        out.textures_delta.clear();
+    }
+    assert_eq!(crate::menus::command_for_path("Window > Mix", &crate::menus::ui_aliases()).as_deref(), Some("window.mix"));
+    assert_eq!(tr("Window"), "ウィンドウ");
+    set(Language::En);
+}
