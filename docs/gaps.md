@@ -1,6 +1,6 @@
 # Where SoundCraft falls short of Pro Tools
 
-> **Last reviewed:** 2026-10-25 · **Last updated:** 2026-10-25 · **Change:** trivial (G-01: `setup.playback_engine` applies the device buffer in the desktop app; G-04: Clip Looping crossfade and loop count) · **Target:** Avid Pro Tools Ultimate 2026.4.1
+> **Last reviewed:** 2026-11-04 · **Last updated:** 2026-11-04 · **Change:** trivial (G-09: Japanese interface and Japanese system-font fallback) · **Target:** Avid Pro Tools Ultimate 2026.4.1
 
 Every known shortfall, one entry each, ranked by how much it stops a Pro Tools user from doing
 real work in SoundCraft. This is the work list: pick from the top. Rows marked **alpha blocker**
@@ -153,8 +153,9 @@ parametric request #139. ≈ 80–120 h.
 ### G-09. Localization
 
 See [`localization-parity.md`](localization-parity.md): no catalog, every string literal in code;
-egui has no complex-script shaping or RTL; no CJK font fallback (PR #141 open). ≈ 70–110 h plus
-native-speaker review.
+egui has no complex-script shaping or RTL. French, Spanish (PR #143) and Japanese are translated
+through `i18n::tr`; Japanese and Korean draw with the system's own fonts (no bundled CJK fallback,
+PR #141 open, so the web build shows boxes). ≈ 60–100 h plus native-speaker review.
 
 ### G-10. Control surfaces
 
@@ -230,6 +231,7 @@ missing. Out of scope unless the owner decides otherwise.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | trivial | G-09: Japanese interface (`ui.language {"lang":"ja"}`) and Japanese system-font fallback |
 | 2026-10-25 | trivial | G-04: Clip Looping (#1030) lacks the loop crossfade option, and Number of Loops stops at 512 while length and fill make up to 1000 loops |
 | 2026-10-25 | trivial | G-01: `setup.playback_engine` and `setup.hardware` apply the device and buffer in the desktop app; headless returns `applied: false` |
 | 2026-10-24 | trivial | G-08: 27 processors + 3 instruments, as the plugin registry holds; G-20: the sampler shipped (#108), so it is no longer listed as missing |

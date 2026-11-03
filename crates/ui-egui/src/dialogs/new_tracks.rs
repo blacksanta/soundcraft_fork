@@ -1,5 +1,6 @@
 //! One or more independent New Tracks rows, submitted as a single engine command.
 
+use crate::i18n::tr;
 use egui::{Event, Key, TextStyle, Ui, vec2};
 use serde_json::{Value, json};
 use soundcraft_model::{ChannelFormat, TrackKind};
@@ -162,7 +163,7 @@ impl NewTracks {
                 let id = egui::Id::unique(("new_tracks_row", row.key));
                 let rect = egui::Rect::from_min_size(ui.available_rect_before_wrap().min, vec2(ui.available_width(), ui.spacing().interact_size.y));
                 ui.scope_builder(egui::UiBuilder::new().scope_id(id).max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
-                    let label = ui.label("Create");
+                    let label = ui.label(tr("Create"));
                     let counter = ui
                         .scope_builder(egui::UiBuilder::new().scope_id(id.with("count")), |ui| {
                             ui.spacing_mut().interact_size.x = widths.count;
@@ -180,15 +181,15 @@ impl NewTracks {
                     if counter.gained_focus() {
                         counter.scroll_to_me(Some(egui::Align::Center));
                     }
-                    ui.label("new");
+                    ui.label(tr("new"));
                     let format = if has_format(&row.kind) {
                         Some(
                             craft_ui::ComboBox::from_id_salt("nt_fmt")
                                 .width(widths.format)
-                                .selected_text(&row.format)
+                                .selected_text(tr(&row.format))
                                 .show_ui(ui, |ui| {
                                     for f in ChannelFormat::ALL {
-                                        ui.selectable_value(&mut row.format, f.label().to_string(), f.label());
+                                        ui.selectable_value(&mut row.format, f.label().to_string(), tr(f.label()));
                                     }
                                 })
                                 .response
@@ -200,10 +201,10 @@ impl NewTracks {
                     };
                     let kind = craft_ui::ComboBox::from_id_salt("nt_kind")
                         .width(widths.kind)
-                        .selected_text(TrackKind::from_id(&row.kind).map_or("Audio Track", |k| k.label()))
+                        .selected_text(tr(TrackKind::from_id(&row.kind).map_or("Audio Track", |k| k.label())))
                         .show_ui(ui, |ui| {
                             for k in TrackKind::ALL {
-                                if ui.selectable_label(row.kind == k.id(), k.label()).clicked() {
+                                if ui.selectable_label(row.kind == k.id(), tr(k.label())).clicked() {
                                     set_new_track_kind(&mut row.kind, &mut row.name, k);
                                 }
                             }
@@ -211,24 +212,24 @@ impl NewTracks {
                         .response
                         .accessible_name("Track kind");
                     let timebase = if has_timebase(&row.kind) {
-                        ui.label("in");
+                        ui.label(tr("in"));
                         Some(
                             craft_ui::ComboBox::from_id_salt("nt_tb")
                                 .width(widths.timebase)
-                                .selected_text(if row.timebase == "ticks" { "Ticks" } else { "Samples" })
+                                .selected_text(tr(if row.timebase == "ticks" { "Ticks" } else { "Samples" }))
                                 .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut row.timebase, "samples".to_string(), "Samples");
-                                    ui.selectable_value(&mut row.timebase, "ticks".to_string(), "Ticks");
+                                    ui.selectable_value(&mut row.timebase, "samples".to_string(), tr("Samples"));
+                                    ui.selectable_value(&mut row.timebase, "ticks".to_string(), tr("Ticks"));
                                 })
                                 .response
                                 .accessible_name("Timebase"),
                         )
                     } else {
-                        ui.allocate_space(vec2(text_width(ui, "in"), ui.spacing().interact_size.y));
+                        ui.allocate_space(vec2(text_width(ui, tr("in")), ui.spacing().interact_size.y));
                         ui.allocate_space(vec2(widths.timebase, ui.spacing().interact_size.y));
                         None
                     };
-                    let label = ui.label("Name:");
+                    let label = ui.label(tr("Name:"));
                     let name = crate::widgets::named_text_field(
                         ui.add(egui::TextEdit::singleline(&mut row.name).id(id.with("name")).desired_width(NAME_WIDTH)).labelled_by(label.id),
                         "Name:",
@@ -237,10 +238,10 @@ impl NewTracks {
                         self.active = index;
                     }
                     let size = vec2(ROW_BUTTON_WIDTH, ui.spacing().interact_size.y);
-                    if ui.add_enabled(len > 1, egui::Button::new("−").min_size(size)).on_hover_text("Remove this row").clicked() {
+                    if ui.add_enabled(len > 1, egui::Button::new("−").min_size(size)).on_hover_text(tr("Remove this row")).clicked() {
                         remove = Some(index);
                     }
-                    if ui.add_enabled(len < MAX_TRACKS, egui::Button::new("+").min_size(size)).on_hover_text("Add a row below").clicked() {
+                    if ui.add_enabled(len < MAX_TRACKS, egui::Button::new("+").min_size(size)).on_hover_text(tr("Add a row below")).clicked() {
                         insert = Some(index);
                     }
                 });
@@ -258,10 +259,10 @@ impl NewTracks {
         let total = self.rows.iter().fold(0_u32, |total, row| total.saturating_add(row.count));
         let can_create = !self.rows.is_empty() && total <= MAX_TRACKS as u32;
         if !can_create {
-            ui.colored_label(ui.visuals().error_fg_color, "Create up to 128 tracks at a time.");
+            ui.colored_label(ui.visuals().error_fg_color, tr("Create up to 128 tracks at a time."));
         }
         // Enter on a focused row button changes that row only; it must not also submit the dialog.
-        if crate::dialogs::buttons_enabled(ui, "Create", enter && !row_action, can_create) && !row_action {
+        if crate::dialogs::buttons_enabled(ui, tr("Create"), enter && !row_action, can_create) && !row_action {
             Some(json!({"rows": self.rows.iter().map(NewTrackRow::params).collect::<Vec<_>>()}))
         } else {
             None
@@ -284,15 +285,15 @@ impl RowWidths {
             count: (styled_text_width(ui, "128", &ui.style().drag_value_text_style) + 2.0 * ui.spacing().button_padding.x)
                 .ceil()
                 .max(ui.spacing().interact_size.x),
-            format: combo_width(ui, ChannelFormat::ALL.iter().map(|f| f.label())),
-            kind: combo_width(ui, TrackKind::ALL.iter().map(|k| k.label())),
-            timebase: combo_width(ui, ["Samples", "Ticks"].into_iter()),
+            format: combo_width(ui, ChannelFormat::ALL.iter().map(|f| tr(f.label()))),
+            kind: combo_width(ui, TrackKind::ALL.iter().map(|k| tr(k.label()))),
+            timebase: combo_width(ui, ["Samples", "Ticks"].into_iter().map(tr)),
         }
     }
 
     /// Returns the complete width required by one row, including labels and buttons.
     fn total(&self, ui: &Ui) -> f32 {
-        let labels: f32 = ["Create", "new", "in", "Name:"].iter().map(|s| text_width(ui, s)).sum();
+        let labels: f32 = ["Create", "new", "in", "Name:"].iter().map(|s| text_width(ui, tr(s))).sum();
         labels + self.count + self.format + self.kind + self.timebase + NAME_WIDTH + 2.0 * ROW_BUTTON_WIDTH + 10.0 * ui.spacing().item_spacing.x + 8.0
     }
 }

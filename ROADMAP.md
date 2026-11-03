@@ -91,7 +91,7 @@ Weights and evidence per row: [target-app-parity.md](docs/target-app-parity.md#f
 | French | fr | none (PR #143 open) | 0 % |
 | Portuguese | pt | none | 0 % |
 | Indonesian | id | none | 0 % |
-| Japanese | ja | none | 0 % |
+| Japanese | ja | full UI (agent translation, native review pending) | ~100 % of `tr` strings |
 | German | de | none | 0 % |
 | Korean | ko | none | 0 % |
 | Vietnamese | vi | none | 0 % |
